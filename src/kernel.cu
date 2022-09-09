@@ -239,8 +239,8 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *po
     glm::vec3 perceived_center = glm::vec3(0.0f, 0.0f, 0.0f);
     glm::vec3 separation = glm::vec3(0.0f, 0.0f, 0.0f);
     glm::vec3 perceived_velocity = glm::vec3(0.0f, 0.0f, 0.0f);
-    int com_neighbors;
-    int avg_vel_neighbors;
+    int com_neighbors = 0;
+    int avg_vel_neighbors = 0;
 
     for (int i = 0; i < N; i++)
     {
@@ -406,7 +406,7 @@ void Boids::stepSimulationNaive(float dt) {
     dim3 fullBlocksPerGrid((numObjects + blockSize - 1) / blockSize);
 
     kernUpdateVelocityBruteForce <<<fullBlocksPerGrid, blockSize >>> (numObjects, dev_pos, dev_vel1, dev_vel2);
-    kernUpdatePos <<<fullBlocksPerGrid, blockSize >>> (numObjects, dt, dev_pos, dev_vel2);
+    kernUpdatePos <<<fullBlocksPerGrid, blockSize >>> (numObjects, dt, dev_pos, dev_vel1);
 
     std::swap(dev_vel1, dev_vel2);
 }
