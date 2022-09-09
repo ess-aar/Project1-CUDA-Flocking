@@ -246,16 +246,16 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *po
     {
         if (i == iSelf) continue;
 
-        if (glm::distance(pos[i], pos[iSelf]) < rule1Distance) {
+        if (glm::length(pos[i] - pos[iSelf]) < rule1Distance) {
             perceived_center += pos[i];
             com_neighbors++;
         }
 
-        if (glm::distance(pos[i], pos[iSelf]) < rule2Distance) {
+        if (glm::length(pos[i] - pos[iSelf]) < rule2Distance) {
             separation -= (pos[i] - pos[iSelf]);
         }
 
-        if (glm::distance(pos[i], pos[iSelf]) < rule3Distance) {
+        if (glm::length(pos[i] - pos[iSelf]) < rule3Distance) {
             perceived_velocity += vel[i];
             avg_vel_neighbors++;
         }
@@ -294,9 +294,9 @@ __global__ void kernUpdateVelocityBruteForce(int N, glm::vec3 *pos,
     glm::vec3 newVelocity = vel1[index] + computeVelocityChange(N, index, pos, vel1);
 
     //glm::clamp(newVelocity, glm::vec3(-maxSpeed, -maxSpeed, -maxSpeed), glm::vec3(maxSpeed, maxSpeed, maxSpeed));
-    glm::clamp(newVelocity.x, -maxSpeed, maxSpeed);
-    glm::clamp(newVelocity.y, -maxSpeed, maxSpeed);
-    glm::clamp(newVelocity.z, -maxSpeed, maxSpeed);
+    if (glm::length(newVelocity) > maxSpeed) {
+        newVelocity = newVelocity / glm::length(newVelocity) * maxSpeed;
+    }
 
     vel2[index] = newVelocity;
 }
