@@ -375,7 +375,6 @@ __global__ void kernComputeIndices(int N, int gridResolution,
 
 // LOOK-2.1 Consider how this could be useful for indicating that a cell
 //          does not enclose any boids
-// USE THIS TO SET EVERYTHING IN ARRAY TO -1 BEFORE COMPUTING INDICES!!!
 __global__ void kernResetIntBuffer(int N, int *intBuffer, int value) {
   int index = (blockIdx.x * blockDim.x) + threadIdx.x;
   if (index < N) {
@@ -398,18 +397,18 @@ __global__ void kernIdentifyCellStartEnd(int N, int *particleGridIndices,
     if (index == 0) {
         int nextGridIdxVal = particleGridIndices[index + 1];
 
-        gridCellStartIndices[index] = index;
+        gridCellStartIndices[thisGridIdxVal] = index;
         if (thisGridIdxVal != nextGridIdxVal) {
-            gridCellEndIndices[index] = index;
+            gridCellEndIndices[thisGridIdxVal] = index;
         }
     }
 
     else if (index == (N - 1)) {
         int prevGridIdxVal = particleGridIndices[index - 1];
 
-        gridCellEndIndices[index] = index;
+        gridCellEndIndices[thisGridIdxVal] = index;
         if (thisGridIdxVal != prevGridIdxVal) {
-            gridCellStartIndices[index] = index;
+            gridCellStartIndices[thisGridIdxVal] = index;
         }
     }
          
@@ -418,11 +417,11 @@ __global__ void kernIdentifyCellStartEnd(int N, int *particleGridIndices,
         int nextGridIdxVal = particleGridIndices[index + 1];
 
         if (thisGridIdxVal != prevGridIdxVal) {
-            gridCellStartIndices[index] = index;
+            gridCellStartIndices[thisGridIdxVal] = index;
         }
 
         if (thisGridIdxVal != nextGridIdxVal) {
-            gridCellEndIndices[index] = index;
+            gridCellEndIndices[thisGridIdxVal] = index;
         }
     }
 }
@@ -454,15 +453,16 @@ __global__ void kernUpdateVelNeighborSearchScattered(
     //glm::vec3 thisCellMaxWorld = gridMin + glm::vec3(cellWidth, cellWidth, cellWidth);
 
     glm::vec3 minIdx = gridIndex3D;
+    glm::vec3 increment = glm::vec3(2.f, 2.f, 2.f);
 
     // CHECK FOR BOUNDARIES!!!
-    if (pos[index].x < thisCellCenterWorld.x) {
+    if (pos[index].x < thisCellCenterWorld.x && minIdx.x > 0) {
         minIdx.x--;
     }
-    if (pos[index].y < thisCellCenterWorld.y) {
+    if (pos[index].y < thisCellCenterWorld.y && minIdx.y > 0) {
         minIdx.y--;
     }
-    if (pos[index].z < thisCellCenterWorld.z) {
+    if (pos[index].z < thisCellCenterWorld.z && minIdx.z > 0) {
         minIdx.z--;
     }
 
@@ -588,24 +588,27 @@ void Boids::stepSimulationScatteredGrid(float dt) {
 
     // set start & end index buffers to -1
     kernResetIntBuffer << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_gridCellStartIndices, -1);
+    checkCUDAErrorWithLine("Calling kernResetIntBuffer failed!");
     kernResetIntBuffer << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_gridCellEndIndices, -1);
+    checkCUDAErrorWithLine("Calling kernResetIntBuffer failed!");
 
     // fill grid indices & array indices buffers
     kernComputeIndices << <fullBlocksPerGrid, blockSize >> > (numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, 
         dev_pos, dev_particleArrayIndices, dev_particleGridIndices);
+    checkCUDAErrorWithLine("Calling kernComputeIndices failed!");
 
     // sort
     thrust::sort_by_key(dev_thrust_particleGridIndices, dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices);
 
     // fill start & end arrays
-    kernIdentifyCellStartEnd << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_particleGridIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
+    //kernIdentifyCellStartEnd << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_particleGridIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
 
-    // update vel
-    kernUpdateVelNeighborSearchScattered << <fullBlocksPerGrid, blockSize >> > (numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, gridCellWidth,
-        dev_gridCellStartIndices, dev_gridCellEndIndices, dev_particleArrayIndices, dev_pos, dev_vel1, dev_vel2);
-        
-    // update pos
-    kernUpdatePos << <fullBlocksPerGrid, blockSize >> > (numObjects, dt, dev_pos, dev_vel2);
+    //// update vel
+    //kernUpdateVelNeighborSearchScattered << <fullBlocksPerGrid, blockSize >> > (numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, gridCellWidth,
+    //    dev_gridCellStartIndices, dev_gridCellEndIndices, dev_particleArrayIndices, dev_pos, dev_vel1, dev_vel2);
+    //    
+    //// update pos
+    //kernUpdatePos << <fullBlocksPerGrid, blockSize >> > (numObjects, dt, dev_pos, dev_vel2);
 
     // sway pointers
     std::swap(dev_vel1, dev_vel2);
