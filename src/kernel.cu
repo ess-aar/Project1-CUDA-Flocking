@@ -501,9 +501,14 @@ __global__ void kernUpdateVelNeighborSearchScattered(
     int avg_vel_neighbors = 0;
 
     // for all cell that are neighbors
-    for (int x = minIdx.x; x < minIdx.x + increment.x; x++) {
+    //for (int x = minIdx.x; x < minIdx.x + increment.x; x++) {
+    //    for (int y = minIdx.y; y < minIdx.y + increment.y; y++) {
+    //        for (int z = minIdx.z; z < minIdx.z + increment.z; z++) {
+
+    for (int z = minIdx.z; z < minIdx.z + increment.z; z++) {
         for (int y = minIdx.y; y < minIdx.y + increment.y; y++) {
-            for (int z = minIdx.z; z < minIdx.z + increment.z; z++) {
+            for (int x = minIdx.x; x < minIdx.x + increment.x; x++) {
+
                 // get start & indices of boid indices array
                 int gridIndex = gridIndex3Dto1D(x, y, z, gridResolution);
 
