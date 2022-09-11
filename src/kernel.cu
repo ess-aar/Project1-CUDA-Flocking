@@ -87,8 +87,6 @@ int *dev_gridCellEndIndices;   // to this cell?
 // TODO-2.3 - consider what additional buffers you might need to reshuffle
 // the position and velocity data to be coherent within cells.
 glm::vec3* dev_pos_copy;
-glm::vec3* dev_vel1_copy;
-glm::vec3* dev_vel2_copy;
 
 // LOOK-2.1 - Grid parameters based on simulation parameters.
 // These are automatically computed for you in Boids::initSimulation
@@ -191,12 +189,6 @@ void Boids::initSimulation(int N) {
 
   cudaMalloc((void**)&dev_pos_copy, N * sizeof(glm::vec3));
   checkCUDAErrorWithLine("cudaMalloc dev_pos_copy failed!");
-
-  cudaMalloc((void**)&dev_vel1_copy, N * sizeof(glm::vec3));
-  checkCUDAErrorWithLine("cudaMalloc dev_vel1_copy failed!");
-
-  cudaMalloc((void**)&dev_vel2_copy, N * sizeof(glm::vec3));
-  checkCUDAErrorWithLine("cudaMalloc dev_vel2_copy failed!");
 
   cudaDeviceSynchronize();
 }
@@ -501,13 +493,9 @@ __global__ void kernUpdateVelNeighborSearchScattered(
     int avg_vel_neighbors = 0;
 
     // for all cell that are neighbors
-    //for (int x = minIdx.x; x < minIdx.x + increment.x; x++) {
-    //    for (int y = minIdx.y; y < minIdx.y + increment.y; y++) {
-    //        for (int z = minIdx.z; z < minIdx.z + increment.z; z++) {
-
-    for (int z = minIdx.z; z < minIdx.z + increment.z; z++) {
+    for (int x = minIdx.x; x < minIdx.x + increment.x; x++) {
         for (int y = minIdx.y; y < minIdx.y + increment.y; y++) {
-            for (int x = minIdx.x; x < minIdx.x + increment.x; x++) {
+            for (int z = minIdx.z; z < minIdx.z + increment.z; z++) {
 
                 // get start & indices of boid indices array
                 int gridIndex = gridIndex3Dto1D(x, y, z, gridResolution);
@@ -632,10 +620,11 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
     int com_neighbors = 0;
     int avg_vel_neighbors = 0;
 
-    // for all cell that are neighbors                                      REORDER LOOPS???
-    for (int x = minIdx.x; x < minIdx.x + increment.x; x++) {
+    // for all cell that are neighbors
+    for (int z = minIdx.z; z < minIdx.z + increment.z; z++) {
         for (int y = minIdx.y; y < minIdx.y + increment.y; y++) {
-            for (int z = minIdx.z; z < minIdx.z + increment.z; z++) {
+            for (int x = minIdx.x; x < minIdx.x + increment.x; x++) {
+
                 // get start & indices of boid indices array
                 int gridIndex = gridIndex3Dto1D(x, y, z, gridResolution);
 
@@ -695,23 +684,16 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 }
 
 __global__ void kernReshuffleParticleData(int N, int* arrayIndices,
-    glm::vec3* pos, glm::vec3* vel1, glm::vec3* vel2,
-    glm::vec3* pos_copy, glm::vec3* vel1_copy, glm::vec3* vel2_copy) {
+    glm::vec3* pos, glm::vec3* pos_copy, glm::vec3* vel1, glm::vec3* vel2) {
 
     int index = threadIdx.x + (blockIdx.x * blockDim.x);
     if (index >= N) {
         return;
     }
 
-    // copy data to copy arrays
-    std::memcpy(pos_copy, pos, sizeof(glm::vec3) * N);
-    std::memcpy(vel1_copy, vel1, sizeof(glm::vec3) * N);
-    std::memcpy(vel2_copy, vel2, sizeof(glm::vec3) * N);
-
-    // put arrayIndices[index] into data array[index]
-    pos[index] = pos_copy[arrayIndices[index]];
-    vel1[index] = vel1_copy[arrayIndices[index]];
-    vel2[index] = vel2_copy[arrayIndices[index]];
+    int newIdx = arrayIndices[index];
+    pos_copy[index] = pos[newIdx];
+    vel2[index] = vel1[newIdx];
 }
 
 /**
@@ -815,22 +797,21 @@ void Boids::stepSimulationCoherentGrid(float dt) {
     kernIdentifyCellStartEnd << <fullBlocksPerGridforBoids, blockSize >> > (numObjects, dev_particleGridIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
     checkCUDAErrorWithLine("Calling kernIdentifyCellStartEnd failed!");
 
-    // reshuffle particle data
-    kernReshuffleParticleData << <fullBlocksPerGridforBoids, blockSize >> > (numObjects, dev_particleArrayIndices, dev_pos, dev_vel1, dev_vel2, 
-        dev_pos_copy, dev_vel1_copy, dev_vel2_copy);
+    // reshuffle particle data  -  pos -> pos copy; vel1 -> vel2
+    kernReshuffleParticleData << <fullBlocksPerGridforBoids, blockSize >> > (numObjects, dev_particleArrayIndices, dev_pos, dev_pos_copy, dev_vel1, dev_vel2);
     checkCUDAErrorWithLine("Calling kernReshuffleParticleData failed!");
 
-    // update vel
+    // update vel   -   curr pos in pos_copy; curr vel in vel2
     kernUpdateVelNeighborSearchScattered << <fullBlocksPerGridforBoids, blockSize >> > (numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, gridCellWidth,
-        dev_gridCellStartIndices, dev_gridCellEndIndices, dev_particleArrayIndices, dev_pos, dev_vel1, dev_vel2);
+        dev_gridCellStartIndices, dev_gridCellEndIndices, dev_particleArrayIndices, dev_pos_copy, dev_vel2, dev_vel1);
     checkCUDAErrorWithLine("Calling kernUpdateVelNeighborSearchScattered failed!");
 
     // update pos
-    kernUpdatePos << <fullBlocksPerGridforBoids, blockSize >> > (numObjects, dt, dev_pos, dev_vel2);
+    kernUpdatePos << <fullBlocksPerGridforBoids, blockSize >> > (numObjects, dt, dev_pos_copy, dev_vel1);
     checkCUDAErrorWithLine("Calling kernUpdatePos failed!");
 
-    // sway pointers (not different than before in my case)
-    std::swap(dev_vel1, dev_vel2);
+    // sway pointers (vel doesn't need to be swapped anymore)
+    std::swap(dev_pos, dev_pos_copy);
 }
 
 void Boids::endSimulation() {
@@ -845,8 +826,6 @@ void Boids::endSimulation() {
   cudaFree(dev_gridCellStartIndices);
   cudaFree(dev_gridCellEndIndices);
 
-  cudaFree(dev_vel1_copy);
-  cudaFree(dev_vel2_copy);
   cudaFree(dev_pos_copy);
 }
 
