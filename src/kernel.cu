@@ -450,40 +450,6 @@ __global__ void kernUpdateVelNeighborSearchScattered(
         return;
     }
 
-    glm::vec3 gridIndex3D = glm::floor((pos[index] - gridMin) * inverseCellWidth);
-
-    glm::vec3 thisCellCenterWorld = (gridIndex3D * cellWidth) + gridMin + glm::vec3((cellWidth * 0.5), (cellWidth * 0.5), (cellWidth * 0.5));
-    glm::vec3 minIdx = gridIndex3D;
-    glm::vec3 increment = glm::vec3(2.f, 2.f, 2.f);
-
-    // updating min index while checking for min boundaries
-    if (pos[index].x < thisCellCenterWorld.x) {
-        if (minIdx.x > 0)
-            minIdx.x--;
-        else
-            increment.x--;
-    }
-    if (pos[index].y < thisCellCenterWorld.y && minIdx.y > 0) {
-        if (minIdx.y > 0)
-            minIdx.y--;
-        else
-            increment.y--;
-    }
-    if (pos[index].z < thisCellCenterWorld.z && minIdx.z > 0) {
-        if (minIdx.z > 0)
-            minIdx.z--;
-        else
-            increment.z--;
-    }
-
-    // updating increment while checking for max boundaries
-    if (minIdx.x + 2 > gridResolution)
-        increment.x--;
-    if (minIdx.y + 2 > gridResolution)
-        increment.y--;
-    if (minIdx.z + 2 > gridResolution)
-        increment.z--;
-
     glm::vec3 velocityChange = glm::vec3(0.0f, 0.0f, 0.0f);
 
     glm::vec3 perceived_center = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -492,10 +458,16 @@ __global__ void kernUpdateVelNeighborSearchScattered(
     int com_neighbors = 0;
     int avg_vel_neighbors = 0;
 
+    glm::vec3 gridIndex3D = glm::floor((pos[index] - gridMin) * inverseCellWidth);
+
+    int step = 2.f * rule1Distance / cellWidth;
+    glm::vec3 offset = glm::vec3(rule1Distance / cellWidth);
+    glm::vec3 curr = glm::floor(gridIndex3D + offset);
+
     // for all cell that are neighbors
-    for (int x = minIdx.x; x < minIdx.x + increment.x; x++) {
-        for (int y = minIdx.y; y < minIdx.y + increment.y; y++) {
-            for (int z = minIdx.z; z < minIdx.z + increment.z; z++) {
+    for (int x = (curr.x - step); x <= curr.x; x++) {
+        for (int y = (curr.y - step); y <= curr.y; y++) {
+            for (int z = (curr.z - step); z <= curr.z; z++) {
 
                 // get start & indices of boid indices array
                 int gridIndex = gridIndex3Dto1D(x, y, z, gridResolution);
@@ -578,40 +550,6 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
         return;
     }
 
-    glm::vec3 gridIndex3D = glm::floor((pos[index] - gridMin) * inverseCellWidth);
-
-    glm::vec3 thisCellCenterWorld = (gridIndex3D * cellWidth) + gridMin + glm::vec3((cellWidth * 0.5), (cellWidth * 0.5), (cellWidth * 0.5));
-    glm::vec3 minIdx = gridIndex3D;
-    glm::vec3 increment = glm::vec3(2.f, 2.f, 2.f);
-
-    // updating min index while checking for min boundaries
-    if (pos[index].x < thisCellCenterWorld.x) {
-        if (minIdx.x > 0)
-            minIdx.x--;
-        else
-            increment.x--;
-    }
-    if (pos[index].y < thisCellCenterWorld.y && minIdx.y > 0) {
-        if (minIdx.y > 0)
-            minIdx.y--;
-        else
-            increment.y--;
-    }
-    if (pos[index].z < thisCellCenterWorld.z && minIdx.z > 0) {
-        if (minIdx.z > 0)
-            minIdx.z--;
-        else
-            increment.z--;
-    }
-
-    // updating increment while checking for max boundaries
-    if (minIdx.x + 2 > gridResolution)
-        increment.x--;
-    if (minIdx.y + 2 > gridResolution)
-        increment.y--;
-    if (minIdx.z + 2 > gridResolution)
-        increment.z--;
-
     glm::vec3 velocityChange = glm::vec3(0.0f, 0.0f, 0.0f);
 
     glm::vec3 perceived_center = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -620,10 +558,16 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
     int com_neighbors = 0;
     int avg_vel_neighbors = 0;
 
+    glm::vec3 gridIndex3D = glm::floor((pos[index] - gridMin) * inverseCellWidth);
+
+    int step = 2.f * rule1Distance / cellWidth;
+    glm::vec3 offset = glm::vec3(rule1Distance / cellWidth);
+    glm::vec3 curr = glm::floor(gridIndex3D + offset);
+
     // for all cell that are neighbors
-    for (int z = minIdx.z; z < minIdx.z + increment.z; z++) {
-        for (int y = minIdx.y; y < minIdx.y + increment.y; y++) {
-            for (int x = minIdx.x; x < minIdx.x + increment.x; x++) {
+    for (int z = (curr.z - step); z <= curr.z; z++) {
+        for (int y = (curr.y - step); y <= curr.y; y++) {
+            for (int x = (curr.x - step); x <= curr.x; x++) {
 
                 // get start & indices of boid indices array
                 int gridIndex = gridIndex3Dto1D(x, y, z, gridResolution);
